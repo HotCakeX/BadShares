@@ -1,58 +1,70 @@
-﻿function New-BadSharesRootDirectory {
-    [CmdletBinding()]
+function New-BadSharesRootDirectory {
+    [CmdletBinding(
+        SupportsShouldProcess = $true,
+        ConfirmImpact = 'High'
+    )]
     param (
         [ValidateNotNullOrEmpty()]
         [string]$Root = "C:\",
 
         [ValidateNotNullOrEmpty()]
-        [string]$Name = "BadShares"
+        [string]$Name = "BadShares",
+
+        [Parameter(Mandatory = $false)]
+        [System.Management.Automation.SwitchParameter]$Force
     )
 
     begin {
         $BadSharesRoot = $Root
         $BadSharesSharesDirectoryName = "BadShares"
         $BadSharesPath = "$BadSharesRoot$BadSharesSharesDirectoryName"
+
+        # Detecting if Confirm switch is used to bypass the confirmation prompts
+        if ($Force -and -Not $Confirm) {
+            $ConfirmPreference = 'None'
+        }
     }
 
     process {
-        Write-Host "If you continue, this script create several new folders and files." -ForegroundColor Yellow 
-        Write-Host "Do you want to continue [Y] Yes "  -ForegroundColor Yellow -NoNewline
-        Write-Host "[N] " -ForegroundColor Yellow -NoNewline
-        Write-Host "No: "  -ForegroundColor Yellow -NoNewline
-        $WarningError = ''
-        $WarningError = Read-Host
-        if ($WarningError -like 'y') {
-            Write-Host "`n[i] Beginning the BadShares setup process..."
-           
-        } else {
-            Write-Warning "You need to select y to use BadShares."
-            break;
+        # Prompt for confirmation before proceeding
+        if ($PSCmdlet.ShouldProcess('Your computer', 'Creating several new folders and files')) { 
+            Write-Host -Object "`n[i] Beginning the BadShares setup process..."
         }
+        else {
+            Write-Warning -Message "You need to confirm the action to use BadShares."
+            break
+        }
+
+        # Reset the confim preference since there is a nested prompt present
+        if ($Force -and -Not $Confirm) {
+            $ConfirmPreference = 'None'
+        }
+        else {
+            $ConfirmPreference = 'High'
+        }
+
         if (Test-Path -Path $BadSharesPath) {
             Write-Warning "The directory '$BadSharesPath' already exists!"
-            Write-Host "[i] If you continue, this script will overwrite: " -ForegroundColor Yellow -NoNewline
-            Write-Host "$BadSharesPath" -ForegroundColor Cyan
-            Write-Host "[i] Do you want to continue [Y] Yes "  -ForegroundColor Yellow -NoNewline
-            Write-Host "[N] " -ForegroundColor Yellow -NoNewline
-            Write-Host "No: "  -ForegroundColor Yellow -NoNewline
-            $WarningError = ''
-            $WarningError = Read-Host
-            if ($WarningError -like 'y') {
+            if ($PSCmdlet.ShouldProcess('Your computer', "Overwriting $BadSharesPath")) { 
                 Write-Host "`n[+] Creating a shares directory at: $BadSharesPath"
                 try {
                     New-Item -Path $BadSharesPath -ItemType Directory -Force
-                } catch {
+                }
+                catch {
                     Write-Error "Could not create the directory '$BadSharesPath'. Please check the path and run again."
                 }
-            } else {
-                Write-Warning "You chose to NOT create a share directory.`nCreate the shares directory manually or run again to create the shares directory."
-                break;
             }
-        } else {
+            else {
+                Write-Warning "You chose to NOT create a share directory.`nCreate the shares directory manually or run again to create the shares directory."
+                break
+            }
+        }
+        else {
             Write-Host "[+] Creating a shares directory at: $BadSharesPath"
             try {
                 New-Item -Path $BadSharesPath -ItemType Directory
-            } catch {
+            }
+            catch {
                 Write-Error "Could not create the directory '$BadSharesPath'. Please check the path and run again."
                 break;
             }
@@ -60,7 +72,8 @@
 
         if (Test-Path -Path $BadSharesPath) {
             Write-Host "[i] The shares directory '$BadSharesPath' has been created."
-        } else {
+        }
+        else {
             Write-Error "Could not create the directory '$BadSharesPath'. Please check the path and run again."
             break;
         }
@@ -92,20 +105,24 @@ function New-SMBSharedFolder {
                 Write-Verbose "Creating directory: $BadSharePath"
                 try {
                     New-Item -Path $BadSharePath -ItemType Directory
-                } catch {
+                }
+                catch {
                     Write-Error "Could not create BadShare: BadSharePath"
                 }
 
                 try {
                     New-SmbShare -Name $Name -Path $BadSharePath
-                } catch {
+                }
+                catch {
                     Write-Error "Could not create the SMB Share for $BadSharePath"
                 }
             }
-        } catch {
+        }
+        catch {
             Write-Error "Could not create SMB shares."
         }
-    } else {
+    }
+    else {
         Write-Warning "You chose to NOT create a the SMB shares.`nCreate the shares manually or run again to create the shares."
         break;
     }
@@ -120,17 +137,19 @@ function Clear-BadShares {
         [string]$Root = "C:\BadShares"
     )
     
-    if (Test-Path $Root){
+    if (Test-Path $Root) {
         try {
             $SharedFolders = Get-ChildItem -Path $Root
             foreach ($Share in $SharedFolders) {
                 Remove-SmbShare -Name $Share.Name
             }
             Remove-Item -Path $Root -Recurse #-Confirm
-        } catch {
+        }
+        catch {
             Write-Error "There was a problem clearing existing BadShares"
         }
-    } else {
+    }
+    else {
         # BadShares doesn't exist yet
     }
 }
@@ -151,15 +170,17 @@ function New-RandomLastWriteTime {
 
     $currentLastWriteTime = (Get-Item $filePath).LastWriteTime
 
-    if ($currentLastWriteTime.Add($timeSpan) -gt (Get-Date)){
+    if ($currentLastWriteTime.Add($timeSpan) -gt (Get-Date)) {
         Write-Verbose "Trying to set the time to: $($currentLastWriteTime.Add($timeSpan)). Time traveler huh?"
         $newLastWriteTime = $currentLastWriteTime.Add(-$timeSpan)
         Set-ItemProperty -Path $filePath -Name LastWriteTime -Value $newLastWriteTime
-    } elseif ($currentLastWriteTime.Add($timeSpan) -lt ((Get-Date).AddYears(-20))) {
+    }
+    elseif ($currentLastWriteTime.Add($timeSpan) -lt ((Get-Date).AddYears(-20))) {
         Write-Verbose "Trying to set the time to: $($currentLastWriteTime.Add($timeSpan)). How old are you?"
         $newLastWriteTime = $currentLastWriteTime.AddYears(20)
         Set-ItemProperty -Path $filePath -Name LastWriteTime -Value $newLastWriteTime
-    } else {
+    }
+    else {
         $newLastWriteTime = $currentLastWriteTime.Add($timeSpan)
         Set-ItemProperty -Path $filePath -Name LastWriteTime -Value $newLastWriteTime
     }
@@ -174,22 +195,22 @@ function New-RandomFile {
         [string]$Path
     )
 
-    $FileNames = @("Annual Report","Quarterly Review","Marketing Plan","Sales Presentation",
-                   "Financial Statement","Budget Forecast","Invoice 2024","Contract Agreement",
-                   "Employment Contract","Resume John Doe","Cover Letter","Meeting Minutes 2024 04 01",
-                   "Policy Guidelines","Procedure Manual","Project Plan Phase1","Product Catalog",
-                   "Client Proposal","Employee Handbook","Expense Report","Training Materials",
-                   "Feedback Survey","Database Backup","Error Log","Marketing Campaign","Training Schedule",
-                   "Performance Review","Customer List","Service Level Agreement","Vendor Contract",
-                   "Meeting Agenda 2024 04 05","Product Specifications","Purchase Order","Sales Forecast",
-                   "Project Status Report","Expense Budget 2024","Marketing Strategy","Customer Satisfaction Survey",
-                   "Training Manual","Feedback Form","Vendor List","Security Policy","Employee Handbook Updates",
-                   "Performance Appraisal Form","IT Support Request","Risk Assessment","Change Request Form",
-                   "Weekly Timesheet","Customer Service Policy","Product Demo Video")
+    $FileNames = @("Annual Report", "Quarterly Review", "Marketing Plan", "Sales Presentation",
+        "Financial Statement", "Budget Forecast", "Invoice 2024", "Contract Agreement",
+        "Employment Contract", "Resume John Doe", "Cover Letter", "Meeting Minutes 2024 04 01",
+        "Policy Guidelines", "Procedure Manual", "Project Plan Phase1", "Product Catalog",
+        "Client Proposal", "Employee Handbook", "Expense Report", "Training Materials",
+        "Feedback Survey", "Database Backup", "Error Log", "Marketing Campaign", "Training Schedule",
+        "Performance Review", "Customer List", "Service Level Agreement", "Vendor Contract",
+        "Meeting Agenda 2024 04 05", "Product Specifications", "Purchase Order", "Sales Forecast",
+        "Project Status Report", "Expense Budget 2024", "Marketing Strategy", "Customer Satisfaction Survey",
+        "Training Manual", "Feedback Form", "Vendor List", "Security Policy", "Employee Handbook Updates",
+        "Performance Appraisal Form", "IT Support Request", "Risk Assessment", "Change Request Form",
+        "Weekly Timesheet", "Customer Service Policy", "Product Demo Video")
     $RandomFileName = $FileNames | Get-Random
-    $FileExtensions = @(".txt",".doc",".docx",".pdf",".xlsx",".xls",".pptx",".ppt",".jpg",".jpeg",
-                        ".png",".gif",".bmp",".zip",".7z",".rar",".csv",".xml",".html",".css",
-                        ".json",".mp3",".mp4",".avi",".mov",".wav",".tiff",".psd",".svg")
+    $FileExtensions = @(".txt", ".doc", ".docx", ".pdf", ".xlsx", ".xls", ".pptx", ".ppt", ".jpg", ".jpeg",
+        ".png", ".gif", ".bmp", ".zip", ".7z", ".rar", ".csv", ".xml", ".html", ".css",
+        ".json", ".mp3", ".mp4", ".avi", ".mov", ".wav", ".tiff", ".psd", ".svg")
     $RandomFileExtension = $FileExtensions | Get-Random
     $RandomFullFileName = "$Path\$RandomFileName$RandomFileExtension"
     $RandomFileSize = Get-Random -Minimum 1 -Maximum 25000
@@ -227,10 +248,12 @@ function Add-DummyFiles {
                     New-RandomFile -Path $Share.FullName 
                 }
             } 
-        } catch {
+        }
+        catch {
             Write-Error "Could not create dummy files"
         }
-    } else {
+    }
+    else {
         Write-Warning "You chose to NOT create the dummy files.`nThe shares will not have dummy files."
         break;
     }
@@ -266,7 +289,7 @@ function Set-MiconfiguredBadShares {
     )
 
     $Groups = @("Everyone", "$($env:USERDOMAIN)\Domain Users", "NT AUTHORITY\Authenticated Users", "NT AUTHORITY\ANONYMOUS LOGON")
-    $UnsafePermissions = @("FullControl","Write","Modify")
+    $UnsafePermissions = @("FullControl", "Write", "Modify")
 
     Write-Host "`n[i] Now we will randomly misconfigure the share permissions"
     Write-Host "[i] If you continue, this script will modify the permissions on random shares" -ForegroundColor Yellow
@@ -289,10 +312,12 @@ function Set-MiconfiguredBadShares {
                 $RandomFileACL.SetAccessRule($RandomFileAccessRule)
                 $RandomShare.SetAccessControl($RandomFileACL)
             }  
-        } catch {
+        }
+        catch {
             Write-Error "Could not create modify share permissions"
         }
-    } else {
+    }
+    else {
         Write-Warning "You chose to NOT modify the share permissions.`nThe shares will not have misconfigured permissions."
         break;
     }
@@ -304,20 +329,20 @@ function Set-UnsecuredCredentials {
         [object]$ShareList
     )
 
-    $FileNames = @("password.txt","pwd.txt","login.txt","unattend.xml","web.cofig",
-                   "install.ini","passwords.doc","passwords.docx","passwords.xls",
-                   "passwords.xlsx","logins.doc","logins.docx","logins.xls","logins.xlsx",
-                   "install.ps1","ProdBackup.psm1", "ProdBackup.psd1", "adminsetup.vbs", 
-                   "admin.bat", "setup.cmd")
-    $UnsecredCredentials = @("Username: johndoe|Password: Password123","Username: alice_smith|Password: qwerty456",
-                             "Username: admin_user|Password: P@ssw0rd!","Username: user123|Password: SecretPass789",
-                             "Username: test_account|Password: LetMeIn2024","Username: jane_doe|Password: Welcome123",
-                             "Username: developer_user|Password: DevPass@2024","Username: support_user|Password: SupportPass#2024",
-                             "Username: marketing_user|Password: Market123!","Username: operations_user|Password: OpsPass567"
-                             "P@ssw0rd123!", "SecurePass456$", "RandomPass789*", "Str0ngPassword!", "Pa$$w0rd!123", "Secur3P@ss", 
-                             "P@ssw0rd2024", "StrongP@ssword!", "Pa$$w0rd!456", "RandomP@ss789","password", "123456", "qwerty", 
-                             "abc123", "letmein", "password1", "12345678", "welcome", "admin", "iloveyou", "1234567", "football", 
-                             "123123", "monkey", "1234567890", "1234", "123456789", "dragon", "baseball", "sunshine")
+    $FileNames = @("password.txt", "pwd.txt", "login.txt", "unattend.xml", "web.cofig",
+        "install.ini", "passwords.doc", "passwords.docx", "passwords.xls",
+        "passwords.xlsx", "logins.doc", "logins.docx", "logins.xls", "logins.xlsx",
+        "install.ps1", "ProdBackup.psm1", "ProdBackup.psd1", "adminsetup.vbs", 
+        "admin.bat", "setup.cmd")
+    $UnsecredCredentials = @("Username: johndoe|Password: Password123", "Username: alice_smith|Password: qwerty456",
+        "Username: admin_user|Password: P@ssw0rd!", "Username: user123|Password: SecretPass789",
+        "Username: test_account|Password: LetMeIn2024", "Username: jane_doe|Password: Welcome123",
+        "Username: developer_user|Password: DevPass@2024", "Username: support_user|Password: SupportPass#2024",
+        "Username: marketing_user|Password: Market123!", "Username: operations_user|Password: OpsPass567"
+        "P@ssw0rd123!", "SecurePass456$", "RandomPass789*", "Str0ngPassword!", "Pa$$w0rd!123", "Secur3P@ss", 
+        "P@ssw0rd2024", "StrongP@ssword!", "Pa$$w0rd!456", "RandomP@ss789", "password", "123456", "qwerty", 
+        "abc123", "letmein", "password1", "12345678", "welcome", "admin", "iloveyou", "1234567", "football", 
+        "123123", "monkey", "1234567890", "1234", "123456789", "dragon", "baseball", "sunshine")
     
     Write-Host "`n[i] Now we will create random files with unsecured credentials"
     Write-Host "[i] If you continue, this will create random files that contain plaintext passwords" -ForegroundColor Yellow
@@ -333,10 +358,12 @@ function Set-UnsecuredCredentials {
                 $RandomFileName = $FileNames | Get-Random
                 New-Item -Path $Share -Name $RandomFileName -Value $($UnsecredCredentials | Get-Random)
             }   
-        } catch {
+        }
+        catch {
             Write-Error "Could not create unsecured credential files"
         }
-    } else {
+    }
+    else {
         Write-Warning "You chose to NOT create unsecured credential files.`nThe shares will not have files with passwords in them."
         break;
     }
@@ -350,13 +377,13 @@ function Find-BadShares {
     foreach ($Share in $ShareList) {
         #Write-Host "Checking permissions on $Share"
         #$SharedFolder = Get-Item $Share
-        $Access = (Get-Acl $Share).Access | Where-Object {$_.IdentityReference -match "Domain Users|Authenticated Users|Everyone" -and $_.FileSystemRights -Match "FullControl|Write|Modify" }
+        $Access = (Get-Acl $Share).Access | Where-Object { $_.IdentityReference -match "Domain Users|Authenticated Users|Everyone" -and $_.FileSystemRights -Match "FullControl|Write|Modify" }
         foreach ($Ace in $Access) {
             $ShareObject = [pscustomobject]@{
-                SharePath = $Share
-                Identity = $Ace.IdentityReference
+                SharePath   = $Share
+                Identity    = $Ace.IdentityReference
                 Permissions = $Ace.FileSystemRights
-                Type = $Ace.AccessControlType
+                Type        = $Ace.AccessControlType
             }
         }
         $ShareObject
@@ -370,10 +397,10 @@ function Find-UnsecuredCredentials {
     )
     $Shares = Get-ChildItem $ShareList -Recurse -File
     foreach ($Share in $Shares) {
-        if ($Share.BaseName -Match "password|pwd|login|admin|install|web|unattend|backup|setup"){
+        if ($Share.BaseName -Match "password|pwd|login|admin|install|web|unattend|backup|setup") {
             $ShareObject = [pscustomobject]@{
                 SharePath = $Share.FullName
-                Keyword = $Matches[0]
+                Keyword   = $Matches[0]
             }
         }
         $ShareObject
@@ -390,32 +417,33 @@ function Invoke-BadShares {
         [string]$Name = "BadShares",
 
         [ValidateNotNullOrEmpty()]
-        [string[]]$BadShareList = @("Human Resources","Finance","Marketing","Sales","Information Technology",
-        "Customer Service","Research and Development","Operations","Legal","Administration","Public Relations",
-        "Quality Assurance","Supply Chain Management","Product Management","Training and Development","Accounting",
-        "Business Development","Engineering","Design","Logistics","Purchasing","Risk Management","Compliance",
-        "Facilities Management","Health and Safety","Internal Audit","Corporate Communications")
+        [string[]]$BadShareList = @("Human Resources", "Finance", "Marketing", "Sales", "Information Technology",
+            "Customer Service", "Research and Development", "Operations", "Legal", "Administration", "Public Relations",
+            "Quality Assurance", "Supply Chain Management", "Product Management", "Training and Development", "Accounting",
+            "Business Development", "Engineering", "Design", "Logistics", "Purchasing", "Risk Management", "Compliance",
+            "Facilities Management", "Health and Safety", "Internal Audit", "Corporate Communications")
     )
 
     if (Test-IsElevated) {
         # Continue
-    } else {
+    }
+    else {
         Write-Warning -Message "Creating SMB Shares requirs Administrator rights. Please launch an elevated PowerShell session."
         break;
     }
 
-function Get-Art {
-    Write-Host "                   (                               " -ForegroundColor Red
-    Write-Host "   (          (     )\ )    )                      " -ForegroundColor Red
-    Write-Host " ( )\     )   )\ ) (()/( ( /(     )  (      (      " -ForegroundColor Red
-    Write-Host " )((_) ( /(  (()/(  /(_)))\()) ( /(  )(    ))\ (   " -ForegroundColor Yellow
-    Write-Host "((_)_  )(_))  ((_))(_)) ((_)\  )(_))(()\  /((_))\  " -ForegroundColor DarkYellow
-    Write-Host " | _ )((_)_   _| | / __|| |(_)((_)_  ((_)(_)) ((_) " -ForegroundColor Cyan
-    Write-Host " | _ \/ _`` |/ _`` | \__ \| ' \ / _`` || '_|/ -_)(_-< " -ForegroundColor Cyan
-    Write-Host " |___/\__,_|\__,_| |___/|_||_|\__,_||_|  \___|/__/ " -ForegroundColor Cyan
+    function Get-Art {
+        Write-Host "                   (                               " -ForegroundColor Red
+        Write-Host "   (          (     )\ )    )                      " -ForegroundColor Red
+        Write-Host " ( )\     )   )\ ) (()/( ( /(     )  (      (      " -ForegroundColor Red
+        Write-Host " )((_) ( /(  (()/(  /(_)))\()) ( /(  )(    ))\ (   " -ForegroundColor Yellow
+        Write-Host "((_)_  )(_))  ((_))(_)) ((_)\  )(_))(()\  /((_))\  " -ForegroundColor DarkYellow
+        Write-Host " | _ )((_)_   _| | / __|| |(_)((_)_  ((_)(_)) ((_) " -ForegroundColor Cyan
+        Write-Host " | _ \/ _`` |/ _`` | \__ \| ' \ / _`` || '_|/ -_)(_-< " -ForegroundColor Cyan
+        Write-Host " |___/\__,_|\__,_| |___/|_||_|\__,_||_|  \___|/__/ " -ForegroundColor Cyan
 
-    Write-Host "`n By: Spencer Alessi                          v0.1 "
-}
+        Write-Host "`n By: Spencer Alessi                          v0.1 "
+    }
     Get-Art
     Write-Host "`nWelcome to BadShares!"
     Write-Host "BadShares creates file shares with random names and randomly misconfigured permissions."
@@ -426,7 +454,7 @@ function Get-Art {
     Write-Host " to remove all BadShares.`n"
 
     Write-Host "[i] Clearing any existing BadShares so we can start fresh..."
-    try { Clear-BadShares -Root $Root$Name} catch {}
+    try { Clear-BadShares -Root $Root$Name } catch {}
 
     # create a BadShare folders, where all our bad shares will live
     $BadShareRoot = New-BadSharesRootDirectory
